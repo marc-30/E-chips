@@ -18,3 +18,24 @@ N'ouvre pas `index.html` en double-clic (file://) : certains navigateurs bloquen
 
 ## Déploiement
 Site statique : sur Vercel, importer le dépôt sans framework (Framework Preset : « Other »), aucune commande de build, dossier de sortie : racine.
+
+## Commande et paiement Paystack
+
+Parcours : panier → « Passer la commande » → nom, numéro WhatsApp, lieu de livraison (pré-rempli par la géolocalisation, modifiable) → paiement Paystack → page `merci.html`.
+
+- Le navigateur n'envoie **jamais de prix** : les prix sont dans `api/config.example.php` (`PRODUCTS`) et recalculés côté serveur.
+- Les commandes sont enregistrées dans `data/orders/*.json` (protégé par `.htaccess`) et un email est envoyé à `ORDER_EMAIL` quand elles sont payées.
+- Géolocalisation : `geo.js` demande la position à l'arrivée sur le site (le navigateur affiche son autorisation), la convertit en adresse (OpenStreetMap) et la propose dans le formulaire.
+
+### Test en local
+`sh lancer.sh` démarre `php -S` (si PHP est installé) ; crée `api/config.local.php` avec `<?php return ['DEMO_MODE'=>true];` pour simuler le paiement sans Paystack.
+
+### Mise en ligne sur LWS (hébergement PHP, HTTPS obligatoire)
+1. Envoie tout le dossier par FTP / gestionnaire de fichiers dans `public_html/`.
+2. Copie `api/config.example.php` en `api/config.local.php` et renseigne :
+   - `PAYSTACK_SECRET_KEY` (clé secrète `sk_test_…` puis `sk_live_…`),
+   - `SITE_URL` (ex. `https://www.echipsafrica.com`),
+   - `DEMO_MODE` => `false`.
+3. Dans Paystack (Settings → API Keys & Webhooks) : URL de webhook = `https://TON-DOMAINE/api/webhook.php`.
+4. Vérifie dans Paystack le multiplicateur du montant pour XOF (`AMOUNT_MULTIPLIER`, 100 par défaut) avec un paiement test.
+5. Active le certificat SSL dans l'espace LWS (la géolocalisation et Paystack l'exigent). Le dossier `data/` doit être inscriptible (chmod 750/755).

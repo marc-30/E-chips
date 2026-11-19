@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Merci — e-CHIPS</title>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--red:#D2101F;--yellow:#F7C325;--cream:#FFF4DC;--ink:#1B1210}
+*{box-sizing:border-box}
+body{margin:0;min-height:100svh;display:grid;place-items:center;padding:24px;background:#FDF3E9;color:var(--ink);font-family:'Outfit',system-ui,sans-serif}
+.card{width:min(520px,100%);background:#fff;border-radius:28px;padding:clamp(24px,5vw,40px);box-shadow:0 30px 70px rgba(120,60,30,.16);text-align:center}
+.card img.logo{height:56px;width:auto;margin-bottom:18px}
+h1{font-family:'Anton',sans-serif;font-weight:400;text-transform:uppercase;font-size:clamp(34px,8vw,52px);line-height:.95;margin:0;color:var(--red)}
+p{line-height:1.55;color:#6b5a55}
+.ref{display:inline-block;background:var(--cream);border-radius:999px;padding:6px 14px;font-weight:700;font-size:14px;color:var(--ink)}
+ul{list-style:none;margin:18px 0;padding:14px 0;border-block:1px solid #EADBC8;text-align:left;display:flex;flex-direction:column;gap:8px}
+li{display:flex;justify-content:space-between;gap:12px}
+.tot{display:flex;justify-content:space-between;font-weight:800;font-size:18px}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:48px;padding:0 24px;border-radius:999px;background:var(--yellow);color:var(--ink);font-weight:700;text-decoration:none;margin:6px 4px 0}
+.btn.ghost{background:transparent;box-shadow:inset 0 0 0 2px var(--ink)}
+.spin{width:44px;height:44px;border-radius:50%;border:4px solid #EADBC8;border-top-color:var(--red);margin:18px auto;animation:r 1s linear infinite}
+@keyframes r{to{transform:rotate(360deg)}}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main class="card">
+  <img class="logo" src="logo.jpeg" alt="e-CHIPS">
+  <section id="wait"><h1>Vérification…</h1><div class="spin"></div><p>Nous confirmons ton paiement auprès de Paystack.</p></section>
+  <section id="ok" hidden>
+    <h1>Merci <span id="nm"></span> !</h1>
+    <p>Ton paiement est confirmé. Nous te contactons sur WhatsApp pour organiser la livraison.</p>
+    <p><span class="ref" id="ref"></span></p>
+    <ul id="lines"></ul>
+    <div class="tot"><span>Total payé</span><b id="tot"></b></div>
+    <p id="addr"></p>
+    <a class="btn" href="index.html">Retour à l'accueil</a>
+  </section>
+  <section id="ko" hidden>
+    <h1>Paiement non confirmé</h1>
+    <p id="kmsg">Nous n'avons pas pu confirmer ton paiement. Si tu as été débité, contacte-nous avec ta référence.</p>
+    <p><span class="ref" id="kref"></span></p>
+    <a class="btn" href="commander.html">Réessayer</a>
+    <a class="btn ghost" href="tel:+2250500234040">Appeler le +225 05 00 23 40 40</a>
+  </section>
+</main>
+<script>
+(async () => {
+  const q = new URLSearchParams(location.search);
+  const ref = q.get('reference') || q.get('trxref');
+  const show = id => { for (const s of ['wait', 'ok', 'ko']) document.getElementById(s).hidden = s !== id; };
+  const fmt = n => n.toLocaleString('fr-FR').replace(/[  ]/g, ' ') + ' FCFA';
+  if (!ref) { show('ko'); return; }
+  document.getElementById('kref').textContent = ref;
+  try {
+    let j = null;
+    for (let i = 0; i < 4; i++) { // le webhook peut avoir quelques secondes de retard
+      const r = await fetch('api/verify.php?reference=' + encodeURIComponent(ref) + (q.get('demo') ? '&demo=1' : ''), { cache: 'no-store' });
+      j = await r.json();
+      if (j.ok && j.status === 'paid') break;
+      await new Promise(r => setTimeout(r, 2500));
+    }
+    if (!j || !j.ok || j.status !== 'paid') { show('ko'); return; }
+    document.getElementById('nm').textContent = j.name.split(' ')[0];
+    document.getElementById('ref').textContent = j.reference;
+    document.getElementById('lines').innerHTML = j.items.map(i => `<li><span>${i.qty} × ${String(i.name).replace(/[<>&]/g, '')}</span><b>${fmt(i.qty * i.price)}</b></li>`).join('');
+    document.getElementById('tot').textContent = fmt(j.total);
+    document.getElementById('addr').textContent = 'Livraison : ' + j.address;
+    try { localStorage.removeItem('echips-cart'); } catch (e) {}
+    show('ok');
+  } catch (e) { show('ko'); }
+})();
+</script>
+</body>
+</html>

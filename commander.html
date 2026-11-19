@@ -139,6 +139,21 @@ nav{padding-top:max(18px,env(safe-area-inset-top));padding-left:max(clamp(16px,4
   .pv .stage{height:34svh}.pv .stage img{max-height:30svh}
   .d-head{padding:10px 20px}.d-foot{padding:10px 20px}
 }
+
+/* ===== commande ===== */
+.ck{display:flex;flex-direction:column;gap:16px;position:relative}
+.f{display:flex;flex-direction:column;gap:6px}
+.f>span{font-weight:700;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:#6b5a55}
+.f input{width:100%;height:50px;border-radius:14px;border:2px solid #EADBC8;background:#fff;padding:0 14px;font:inherit;font-size:16px;color:var(--ink);outline:none;transition:border-color .2s,box-shadow .2s}
+.f input:focus{border-color:var(--red);box-shadow:0 0 0 4px rgba(210,16,31,.12)}
+.locrow{display:flex;gap:8px}
+.locbtn{flex:none;width:50px;height:50px;border-radius:14px;border:2px solid #EADBC8;background:#fff;cursor:pointer;display:grid;place-items:center;color:var(--red)}
+.locbtn:hover{border-color:var(--red)}.locbtn svg{width:22px;height:22px}
+.hint2{min-height:18px;color:#6b5a55;font-size:13px}
+.sum{list-style:none;margin:4px 0 0;padding:12px 0 0;border-top:1px solid #EADBC8;display:flex;flex-direction:column;gap:8px;font-size:15px}
+.sum li{display:flex;justify-content:space-between;gap:12px}.sum b{font-variant-numeric:tabular-nums;white-space:nowrap}
+.err{margin:0;padding:12px 14px;border-radius:12px;background:#FDE3E1;color:#9E0B16;font-weight:600;font-size:14px}
+.btn:disabled{opacity:.6;cursor:wait}
 </style>
 </head>
 <body>
@@ -340,6 +355,70 @@ window.PRODUCTS = [
     gsap.from(body.querySelector('.stage img'), { y: 80, rotation: 20, scale: .7, duration: 1, ease: 'elastic.out(1,.6)', delay: .15 });
   }
 
+  /* ---------- commande : coordonnées + livraison + paiement Paystack ---------- */
+  const esc = t => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  function openCheckout() {
+    let saved = {}; try { saved = JSON.parse(localStorage.getItem('echips-customer') || '{}') || {}; } catch (e) {}
+    const geo = (window.eChipsGeo && window.eChipsGeo.get()) || null;
+    title.textContent = 'Ta commande';
+    const lines = Object.keys(cart).filter(id => cart[id] > 0).map(id => { const p = P.find(x => x.id === id); return `<li><span>${cart[id]} × ${esc(p.name)}</span><b>${fmt(cart[id] * p.price)}</b></li>`; }).join('');
+    body.innerHTML = `<form id="ck" class="ck" novalidate autocomplete="on">
+      <label class="f"><span>Nom complet</span><input name="name" id="ckName" type="text" autocomplete="name" placeholder="Ex : Aïcha Koné" value="${esc(saved.name || '')}" required></label>
+      <label class="f"><span>Numéro WhatsApp</span><input name="whatsapp" id="ckWa" type="tel" inputmode="tel" autocomplete="tel" placeholder="+225 05 00 00 00 00" value="${esc(saved.whatsapp || '')}" required></label>
+      <div class="f"><span>Lieu de livraison</span>
+        <div class="locrow"><input name="address" id="ckAddr" type="text" autocomplete="street-address" placeholder="Quartier, ville, repère…" value="${esc(saved.address || (geo && geo.label) || '')}" required>
+          <button type="button" class="locbtn" id="ckLoc" aria-label="Utiliser ma position actuelle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8"/></svg></button></div>
+        <small class="hint2" id="ckGeoMsg"></small>
+      </div>
+      <input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;opacity:0">
+      <ul class="sum">${lines}</ul>
+      <p class="err" id="ckErr" role="alert" hidden></p>
+    </form>`;
+    foot.innerHTML = `<div class="total"><span>Total</span><b>${fmt(totalPrice())}</b></div>
+      <button class="btn" type="button" id="pay">Payer avec Paystack</button>
+      <button class="btn ghost" type="button" id="backCart">← Retour au panier</button>
+      <p class="note">Paiement sécurisé par Paystack (Mobile Money, carte). Aucune donnée bancaire ne passe par ce site.</p>`;
+    const f = body.querySelector('#ck'), addr = f.querySelector('#ckAddr'), msg = f.querySelector('#ckGeoMsg'), err = f.querySelector('#ckErr');
+    let pos = geo && geo.lat ? { lat: geo.lat, lng: geo.lng } : null, auto = !saved.address && !!(geo && geo.label);
+    const setMsg = t => { msg.textContent = t; };
+    setMsg(auto ? '📍 Position détectée — tu peux la modifier.' : (pos ? '' : 'Active la localisation pour pré-remplir, ou écris ton adresse.'));
+    addr.addEventListener('input', () => { auto = false; setMsg(''); });
+    const useGeo = force => {
+      if (!window.eChipsGeo) return;
+      setMsg('Localisation en cours…');
+      window.eChipsGeo.locate(force).then(g => {
+        if (g && g.label) { addr.value = g.label; pos = { lat: g.lat, lng: g.lng }; auto = true; setMsg('📍 Position détectée — tu peux la modifier.'); }
+        else if (g && g.lat) { pos = { lat: g.lat, lng: g.lng }; setMsg('Position trouvée, précise ton quartier ci-dessus.'); }
+        else setMsg('Impossible de te localiser : écris ton adresse.');
+      });
+    };
+    f.querySelector('#ckLoc').onclick = () => useGeo(true);
+    if (!addr.value) useGeo(false);
+    foot.querySelector('#backCart').onclick = openCart;
+    const payBtn = foot.querySelector('#pay');
+    const fail = (t, el) => { err.textContent = t; err.hidden = false; if (el) el.focus(); };
+    payBtn.onclick = async () => {
+      err.hidden = true;
+      const name = f.name.value.trim(), wa = f.whatsapp.value.trim(), ad = addr.value.trim();
+      if (name.length < 2) return fail('Indique ton nom.', f.name);
+      if (!/^\+?\d{8,15}$/.test(wa.replace(/[\s.()-]/g, ''))) return fail('Numéro WhatsApp invalide (ex : +225 05 00 23 40 40).', f.whatsapp);
+      if (ad.length < 3) return fail('Indique ton lieu de livraison.', addr);
+      try { localStorage.setItem('echips-customer', JSON.stringify({ name, whatsapp: wa, address: ad })); } catch (e) {}
+      payBtn.disabled = true; payBtn.textContent = 'Redirection vers Paystack…';
+      try {
+        const r = await fetch('api/init.php', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, whatsapp: wa, address: ad, lat: pos && pos.lat, lng: pos && pos.lng, website: f.website.value, items: cart }) });
+        let j = null; try { j = await r.json(); } catch (e) {}
+        if (!r.ok || !j || !j.ok) throw new Error((j && j.error) || (r.status === 404 || r.status === 501 ? "Le paiement n'est pas disponible sur ce serveur (il faut PHP, voir README)." : 'Erreur serveur, réessaie.'));
+        location.href = j.url;
+      } catch (e) {
+        payBtn.disabled = false; payBtn.textContent = 'Payer avec Paystack';
+        fail(e.message || 'Connexion impossible, réessaie.');
+      }
+    };
+    if (!drawer.classList.contains('on')) open();
+  }
+
   function openCart() {
     title.textContent = 'Ton panier';
     const ids = Object.keys(cart).filter(id => cart[id] > 0);
@@ -351,9 +430,10 @@ window.PRODUCTS = [
       body.innerHTML = ids.map(id => { const p = P.find(x => x.id === id); return `<div class="line"><img alt="" src="${p.img}"><div class="info"><b>${p.name}</b><span>${p.pack} · ${fmt(p.price)}</span></div>
         <div class="qty"><button type="button" data-id="${id}" data-d="-1" aria-label="Retirer un lot de ${p.name}">−</button><output>${cart[id]}</output><button type="button" data-id="${id}" data-d="1" aria-label="Ajouter un lot de ${p.name}">+</button></div></div>`; }).join('');
       foot.innerHTML = `<div class="total"><span>Total</span><b>${fmt(totalPrice())}</b></div>
-        <a class="btn" id="wa" href="#">Commander sur WhatsApp</a>
-        <a class="btn dark" href="tel:+2250500234040">Appeler · ${PHONE}</a>
-        <p class="note">Commande confirmée par téléphone ou WhatsApp au ${PHONE}.</p>`;
+        <button class="btn" type="button" id="go">Passer la commande</button>
+        <a class="btn ghost" id="wa" href="#">Commander sur WhatsApp</a>
+        <p class="note">Livraison confirmée par téléphone ou WhatsApp au ${PHONE}.</p>`;
+      foot.querySelector('#go').onclick = openCheckout;
       body.querySelectorAll('[data-d]').forEach(btn => btn.onclick = () => {
         cart[btn.dataset.id] = Math.max(0, cart[btn.dataset.id] + +btn.dataset.d);
         if (!cart[btn.dataset.id]) delete cart[btn.dataset.id];
@@ -404,5 +484,6 @@ const clock = new THREE.Clock();
   r.render(scene, cam); requestAnimationFrame(loop);
 })();
 </script>
+<script src="geo.js" defer></script>
 </body>
 </html>
