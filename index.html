@@ -749,10 +749,17 @@ function count(card) {
 function show(i) {
   if (i === active) return;
   const prev = cards[active], next = cards[i], dir = i > active ? 1 : -1;
-  if (prev) gsap.to(prev, { autoAlpha: 0, y: -40 * dir, rotate: -3 * dir, duration: .45, ease: 'power2.in' });
+  // une seule carte visible à la fois : on coupe toute animation en cours, la précédente s'efface, puis la nouvelle apparaît en fondu
+  cards.forEach((c, k) => {
+    if (c === next) return;
+    gsap.killTweensOf(c); gsap.killTweensOf(c.children);
+    if (c === prev) gsap.to(c, { autoAlpha: 0, y: -30 * dir, duration: .3, ease: 'power2.in', overwrite: true });
+    else gsap.set(c, { autoAlpha: 0 });
+  });
   if (next) {
-    gsap.fromTo(next, { autoAlpha: 0, y: 60 * dir, rotate: 4 * dir, scale: .96 }, { autoAlpha: 1, y: 0, rotate: 0, scale: 1, duration: .8, ease: 'expo.out', delay: .15 });
-    gsap.fromTo(next.children, { y: 18, autoAlpha: 0 }, { y: 0, autoAlpha: 1, duration: .6, stagger: .06, ease: 'power3.out', delay: .3 });
+    gsap.killTweensOf(next); gsap.killTweensOf(next.children);
+    gsap.fromTo(next, { autoAlpha: 0, y: 40 * dir, scale: .98 }, { autoAlpha: 1, y: 0, scale: 1, duration: .7, ease: 'power3.out', delay: prev ? .3 : 0, overwrite: true });
+    gsap.fromTo(next.children, { y: 14, autoAlpha: 0 }, { y: 0, autoAlpha: 1, duration: .5, stagger: .06, ease: 'power3.out', delay: (prev ? .3 : 0) + .15, overwrite: true });
     count(next);
   }
   dots.forEach((d, k) => d.classList.toggle('on', k === i));
