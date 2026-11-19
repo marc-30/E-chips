@@ -387,9 +387,11 @@ window.PRODUCTS = [
       if (!window.eChipsGeo) return;
       setMsg('Localisation en cours…');
       window.eChipsGeo.locate(force).then(g => {
-        if (g && g.label) { addr.value = g.label; pos = { lat: g.lat, lng: g.lng }; auto = true; setMsg('📍 Position détectée — tu peux la modifier.'); }
+        const denied = window.eChipsGeo.error() === 1;
+        if (g && g.label && !g.approx) { addr.value = g.label; pos = { lat: g.lat, lng: g.lng }; auto = true; setMsg('📍 Position détectée — tu peux la modifier.'); }
+        else if (g && g.label) { if (!addr.value.trim()) addr.value = g.label; pos = { lat: g.lat, lng: g.lng }; setMsg((denied ? 'Localisation précise refusée. ' : '') + '📍 Position approximative : ajoute ton quartier / repère.'); }
         else if (g && g.lat) { pos = { lat: g.lat, lng: g.lng }; setMsg('Position trouvée, précise ton quartier ci-dessus.'); }
-        else setMsg('Impossible de te localiser : écris ton adresse.');
+        else setMsg(denied ? "Localisation refusée : autorise-la dans les réglages du navigateur (Réglages › Safari › Localisation sur iPhone), ou écris ton adresse." : 'Impossible de te localiser : écris ton adresse.');
       });
     };
     f.querySelector('#ckLoc').onclick = () => useGeo(true);
